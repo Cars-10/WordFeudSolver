@@ -1,47 +1,14 @@
 from dawg import *
-from board import ScrabbleBoard, WordFeudBoard
+from board import ScrabbleBoard, WordFeudBoard, Square
+from OcrWordFeudBoard import *
+from web_service import *
 import pygame
 import sys
 import random
 import pickle
 
-
 # returns a list of all words played on the board
-def all_board_words(board):
-    board_words = []
 
-    # check regular board
-    for row in range(0, 15):
-        temp_word = ""
-        for col in range(0, 16):
-            letter = board[row][col].letter
-            if letter:
-                temp_word += letter
-            else:
-                if len(temp_word) > 1:
-                    board_words.append(temp_word)
-                temp_word = ""
-
-    # check transposed board
-    for col in range(0, 16):
-        temp_word = ""
-        for row in range(0, 16):
-            letter = board[row][col].letter
-            if letter:
-                temp_word += letter
-            else:
-                if len(temp_word) > 1:
-                    board_words.append(temp_word)
-                temp_word = ""
-
-    return board_words
-
-
-def refill_word_rack(rack, tile_bag):
-    to_add = min([7 - len(rack), len(tile_bag)])
-    new_letters = random.sample(tile_bag, to_add)
-    rack = rack + new_letters
-    return rack, new_letters
 
 
 def draw_board(board):
@@ -126,23 +93,6 @@ def draw_board(board):
                                                            square_width, square_height])
 
 
-def draw_start_screen():
-    bgcolor =  (0, 0, 0)
-    fgcolor =  (255, 255, 255)
-
-    screen.fill(bgcolor)
-    intro_text = tile_font.render(f"Scrabble Solver Demonstration", True, fgcolor)
-    intro_rect = intro_text.get_rect(center=(screen_width // 2, screen_height // 4))
-    screen.blit(intro_text, intro_rect)
-
-    info_text = tile_font.render(f"Press Space to Generate New Game Once Game is Finished", True, fgcolor)
-    info_rect = info_text.get_rect(center=(screen_width // 2, screen_height // 4 + 100))
-    screen.blit(info_text, info_rect)
-
-    space_text = tile_font.render("Press Space to Start", True, fgcolor)
-    space_rect = space_text.get_rect(center=(screen_width // 2, screen_height // 2))
-    screen.blit(space_text, space_rect)
-
 
 def draw_rack(rack):
     for i, letter in enumerate(rack):
@@ -165,42 +115,29 @@ def draw_rack(rack):
         screen.blit(letter_score, ((margin + square_width) * (i + 4) + margin + x_offset + 31,
                                    700 + 30))
 
-
-def draw_computer_score(word_score_dict):
+def draw_computer_score(tile_bag):
     x_start = 700
     y_start = 50
-    total = 0
     pygame.draw.rect(screen, (45, 45, 45), [x_start, 25, 255, 50])
-    score_title = score_font.render("Computer Score", True, game.fgcolor)
+    score_title = score_font.render("Letters Remaining", True, game.fgcolor)
     screen.blit(score_title, (x_start + 50, 25))
     pygame.draw.rect(screen, (45, 45, 45), [x_start, y_start, 255, 700])
-    i = 0
-    for word, score in word_score_dict.items():
-        if y_start * (i+1) > 665:
-            x_start += 130
-            i = 0
-        total += score
-        word = score_font.render(word, True, game.fgcolor)
-        score = score_font.render(str(score), True, game.fgcolor)
-        screen.blit(word, (x_start + 2, y_start * (i+1)))
-        screen.blit(score, (x_start + 105, y_start * (i+1)))
 
-        i += .35
-
-    total_score = score_font.render(f"Total Score: {total}", True, game.fgcolor)
-    screen.blit(total_score, (705, 700))
-
+    for letter in tile_bag:
+        if len(letter) == 1:
+            #print(f"letter = {letter}")
+            if y_start * (ord(letter) - ord('A') + 1) > 665:
+                x_start += 130
+            word = score_font.render(str(letter), True, game.fgcolor)
+            screen.blit(word, (x_start + 2, y_start * (ord(letter) - ord('A') + 1)))
 
 if __name__ == "__main__":
-
     pygame.init()
-
     # Game-level variables
     screen_width = 1000
     screen_height = 800
-    screen = pygame.display.set_mode((screen_width, screen_height))
-
-    clock = pygame.time.Clock()
+    #screen = pygame.display.set_mode((screen_width, screen_height))
+    #clock = pygame.time.Clock()
     square_width = 40
     square_height = 40
     margin = 3
@@ -211,84 +148,78 @@ if __name__ == "__main__":
     modifier_font = pygame.font.Font(None, 12)
     tile_font = pygame.font.Font(None, 45)
     score_font = pygame.font.Font(None, 25)
-    game_state = "start_screen"
-
     tile_bag = ["A"] * 9 + ["B"] * 2 + ["C"] * 2 + ["D"] * 4 + ["E"] * 12 + ["F"] * 2 + ["G"] * 3 + \
-               ["H"] * 2 + ["I"] * 9 + ["J"] * 1 + ["K"] * 1 + ["L"] * 4 + ["M"] * 2 + ["N"] * 6 + \
-               ["O"] * 8 + ["P"] * 2 + ["Q"] * 1 + ["R"] * 6 + ["S"] * 4 + ["T"] * 6 + ["U"] * 4 + \
-               ["V"] * 2 + ["W"] * 2 + ["X"] * 1 + ["Y"] * 2 + ["Z"] * 1 + ["%"] * 2
+                ["H"] * 2 + ["I"] * 9 + ["J"] * 1 + ["K"] * 1 + ["L"] * 4 + ["M"] * 2 + ["N"] * 6 + \
+                ["O"] * 8 + ["P"] * 2 + ["Q"] * 1 + ["R"] * 6 + ["S"] * 4 + ["T"] * 6 + ["U"] * 4 + \
+                ["V"] * 2 + ["W"] * 2 + ["X"] * 1 + ["Y"] * 2 + ["Z"] * 1 + ["%"] * 2
 
-    to_load = open("lexicon/scrabble_words_complete.pickle", "rb")
+
+    dictionary = "lexicon/scrabble_words_complete.pickle"
+    dictionary = "lexicon/twl06 USA.pickle"
+    dictionary = "lexicon/twl.pickle"
+    to_load = open(dictionary, "rb")
     root = pickle.load(to_load)
     to_load.close()
-    word_rack = random.sample(tile_bag, 7)
+    image_path = "images/WordFeudScreenshot.png"
+    image_path = "images/IMG_6040 3.png"
+    image_path = "images/IMG_6039 3.png"
+    image_path = "images/IMG_6038 3.png"
+    #image_path = "images/IMG_6041 3.png"
+
+    wf = OcrWordfeudBoard(image_path)
+    game = WordFeudBoard(root)
+    word_rack = wf.get_rack_letters(image_path)
+    print(f"word_rack = {word_rack}")
     [tile_bag.remove(letter) for letter in word_rack]
+    wf.read_board_letters(image_path)
 
-    # THis is not the one that sets up the game
-    game = ScrabbleBoard(root)
-    #game = WordFeudBoard(root)
+    # create code to transfer the contents of wf.board to game.board, skip entries that are '  '
+    # game.board = wf.board
+    for i in range(15):
+        for j in range(15):
+            if wf.read_square(i,j) != '  ':
+                #print(f"game.board[{i}][{j}].letter = {wf.read_square(i,j)}")
+                game.board[i][j].letter = wf.read_square(i,j).strip()
+    # Check if all words on the board are valid
+    game.print_board()
 
-    word_rack = game.get_start_move(word_rack)
-    word_rack, new_letters = refill_word_rack(word_rack, tile_bag)
-    [tile_bag.remove(letter) for letter in new_letters]
+    for word in game.all_board_words(game.board):
+        #print(f"Checking {word}")
+        if not find_in_dawg(word, root) and word:
+            raise Exception(f"Invalid word on board: {word} is not in my dictionary!")
 
-    pygame.display.set_caption("Scrabble")
+    #pygame.display.set_caption("Word Feud Cheater")
+    #screen.fill(game.bgcolor)
+    #pygame.display.flip()
+    word_rack = game.get_best_move(word_rack)
 
-    while True:
-        pygame.display.update()
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                sys.exit()
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_SPACE and game_state == "start_screen":
-                    game_state = "game_screen"
-                if event.key == pygame.K_SPACE and game_state == "end_screen":
-                    game_state = "game_screen"
-                    tile_bag = ["A"] * 9 + ["B"] * 2 + ["C"] * 2 + ["D"] * 4 + ["E"] * 12 + ["F"] * 2 + ["G"] * 3 + \
-                               ["H"] * 2 + ["I"] * 9 + ["J"] * 1 + ["K"] * 1 + ["L"] * 4 + ["M"] * 2 + ["N"] * 6 + \
-                               ["O"] * 8 + ["P"] * 2 + ["Q"] * 1 + ["R"] * 6 + ["S"] * 4 + ["T"] * 6 + ["U"] * 4 + \
-                               ["V"] * 2 + ["W"] * 2 + ["X"] * 1 + ["Y"] * 2 + ["Z"] * 1 + ["%"] * 2
+    #draw_board(game.board)
+    #draw_rack(word_rack)
+    #draw_computer_score(tile_bag)
+    if game.is_transpose:
+        game.board = game.transpose_board(game.board)
+    game.print_board()
+    print(f"Best word = {game.best_word}")
 
-                    word_rack = random.sample(tile_bag, 7)
-                    [tile_bag.remove(letter) for letter in word_rack]
-                    game = ScrabbleBoard(root)
-                    #game = WordFeudBoard(root)
+    for word in game.all_board_words(game.board):
+        print(f"Checking {word}")
+        if not find_in_dawg(word, root) and word:
+            raise Exception(f"Invalid word on board: {word} is not in my dictionary!")
 
-                    game.get_start_move(word_rack)
-                    word_rack, new_letters = refill_word_rack(word_rack, tile_bag)
-                    [tile_bag.remove(letter) for letter in new_letters]
 
-        if game_state == "start_screen":
-            draw_start_screen()
-            continue
+    if game.best_word == "":
+        # draw new hand if can't find any words
+        print("No words found! PASS or SWAP Tiles")
+        sys.exit()
 
-        if game_state == "game_screen":
-            screen.fill(game.bgcolor)
+    #pygame.time.wait(75)
+    # add a pause here to wait for a keypress
+    print("Press Enter to continue...")
+    #input()  # Program pauses here until Enter is pressed
 
-            word_rack = game.get_best_move(word_rack)
-            word_rack, new_letters = refill_word_rack(word_rack, tile_bag)
-            [tile_bag.remove(letter) for letter in new_letters]
-            if game.best_word == "":
-                # draw new hand if can't find any words
-                if len(tile_bag) >= 7:
-                    return_to_bag_words = word_rack.copy()
-                    word_rack, new_letters = refill_word_rack([], tile_bag)
-                    [tile_bag.remove(letter) for letter in new_letters]
+    #pygame.quit()
 
-                else:
-                    game_state = "end_screen"
-                    for word in all_board_words(game.board):
-                        if not find_in_dawg(word, root) and word:
-                            raise Exception(f"Invalid word on board: {word}")
+# TODO: play second word from previous score, when only one letter is played
+# TODO: Check that connected words are valid
 
-        if game_state == "end_screen":
-            draw_board(game.board)
-            draw_rack(word_rack)
-            draw_computer_score(game.word_score_dict)
-            continue
 
-        draw_board(game.board)
-        draw_rack(word_rack)
-        draw_computer_score(game.word_score_dict)
-        pygame.time.wait(75)
